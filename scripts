@@ -1,0 +1,273 @@
+Const ROWSTART = 7
+Const COLSTART = 4
+Const ROWEND = 21
+Const COLEND = 4
+Const PATHWKS = "PATH"
+
+Dim arPath()
+Dim iPathCount As Integer
+Dim ArraysX As Variant
+
+Dim arPaths As Variant
+Dim iPathsCount As Integer
+
+Dim arPathsLen As Variant
+Dim arEqualLenPath As Variant
+
+Dim CostTime As Double
+
+Public Function Delay(t As Single)
+ Dim tNow As Single
+ tNow = Timer
+ 
+ Do While Timer - tNow <= t
+  DoEvents
+ Loop
+End Function
+
+Function getArray() As Variant
+    Dim v As Variant
+    v = Range("A1:H24").Value
+    
+    Dim i1 As Integer, i2 As Integer
+    
+    For i1 = LBound(v, 1) To UBound(v, 1)
+        For i2 = LBound(v, 2) To UBound(v, 2)
+            v(i1, i2) = CInt(v(i1, i2))
+        Next i2
+    Next i1
+    
+    getArray = v
+End Function
+
+Function main() As Double
+    Dim t As Double
+    t = Timer
+    
+    iPathsCount = 0
+    CostTime = 0
+    
+    'Application.ScreenUpdating = False
+    ArraysX = getArray()
+    
+    '初始化存储路径的数组
+    ReDim arPaths(1 To 1)
+    ReDim arPathsLen(1 To 1)
+    
+    '路径的最大步数是矩阵中值为1的单元格数
+    '初始化存储相同长度路径的数组
+    ReDim arEqualLenPath(1 To 57) As Variant
+    
+    Dim sPathEnd As String
+    sPathEnd = ROWSTART & "*" & COLSTART
+    
+    Do Until pathExistsInPATHS(sPathEnd)
+        Call path
+    Loop
+    
+    With Worksheets(PATHWKS)
+        .Range("B2:B1048576").ClearContents
+        .Range("B2").Resize(UBound(arPaths), 1).Value = Application.Transpose(arPaths)
+    End With
+    
+    'Application.ScreenUpdating = True
+    'MsgBox CostTime
+    MsgBox Timer - t
+    
+    'main = Timer - t
+    'MsgBox main
+End Function
+
+Function arrayToString(ByVal arr As Variant) As String
+'    Dim t As Double
+'    t = Timer
+    
+    Dim s As String, i As Integer
+    
+    If TypeName(arr) = "Variant()" Then
+        Dim sArrElement As Variant
+        For Each sArrElement In arr
+            s = s & sArrElement
+        Next
+        arrayToString = s
+    End If
+    
+'    Dim t2 As Double
+'    t2 = Timer - t
+'    CostTime = CostTime + t2
+End Function
+
+Function CopyPath()
+'    Dim t As Double
+'    t = Timer
+    
+    iPathsCount = iPathsCount + 1
+    
+    ReDim Preserve arPaths(1 To iPathsCount)
+    ReDim Preserve arPathsLen(1 To iPathsCount)
+    arPaths(iPathsCount) = arrayToString(arPath)
+    arPathsLen(iPathsCount) = iPathCount
+    
+    Dim v As Variant
+    v = arEqualLenPath(iPathCount)
+    
+    If IsEmpty(v) Then
+        v = Array(iPathsCount)
+    Else
+        ReDim Preserve v(LBound(v) To UBound(v) + 1)
+        v(UBound(v)) = iPathsCount
+    End If
+    
+    arEqualLenPath(iPathCount) = v
+    
+    'MsgBox TypeName(arEqualLenPath(arPathsLen(iPathsCount)))
+'    Dim t2 As Double
+'    t2 = Timer - t
+'    CostTime = CostTime + t2
+End Function
+
+Function pathExistsInPATHS(ByVal sPathNow As String) As Boolean
+    Dim t As Double
+    t = Timer
+    
+    'sPathNow路径的长度
+    Dim iPathNowLength As Integer
+    iPathNowLength = iPathCount + 1
+    
+    '路径长度等于iPathNowLength的地址
+    Dim v As Variant
+    v = arEqualLenPath(iPathNowLength)
+    
+    If IsEmpty(v) Then
+        pathExistsInPATHS = False
+        Exit Function
+    End If
+    
+    Dim i As Integer
+    For i = LBound(v) To UBound(v)
+        If arPaths(v(i)) = sPathNow Then
+            pathExistsInPATHS = True
+            Exit Function
+        End If
+    Next i
+    
+    Dim tt As Double
+    tt = Timer - t
+    CostTime = CostTime + tt
+End Function
+
+Sub retreatPath()
+    iPathCount = iPathCount - 1
+    
+    If iPathCount = 0 Then
+        Exit Sub
+    End If
+    
+    ReDim Preserve arPath(1 To iPathCount)
+    
+    Dim arTemp As Variant
+    arTemp = Split(arPath(iPathCount), "*")
+    
+    Call core(CInt(arTemp(0)), CInt(arTemp(1)))
+End Sub
+
+Sub core(ByVal iRowNow As Integer, iColNow As Integer)
+    Do Until iRowNow = ROWEND And iColNow = COLEND
+        Dim iRowNext As Integer, iColNext As Integer
+        Dim sNowCellsValue As Integer
+        sNowCellsValue = ArraysX(iRowNow, iColNow)
+        
+        Dim i As Integer
+        For i = 1 To 4
+            Dim sTemp As String
+            iRowNext = CInt(Split(stepNext(iRowNow, iColNow, i), "*")(0))
+            iColNext = CInt(Split(stepNext(iRowNow, iColNow, i), "*")(1))
+            
+            sTemp = CStr(iRowNext) & "*" & CStr(iColNext)
+            
+            Dim sNextCellsValue As Integer
+            sNextCellsValue = ArraysX(iRowNext, iColNext)
+            
+            'If iRowNext >= 7 And iRowNext <= 23 And _
+                iColNext >= 3 And iColNext <= 7 Then
+                If sNextCellsValue = sNowCellsValue Then
+                    If Not nextStepExistsInPath(sTemp) Then
+                        Dim sTemp2 As String
+                        sTemp2 = arrayToString(arPath) & sTemp
+                        
+                        If Not pathExistsInPATHS(sTemp2) Then
+                            iPathCount = iPathCount + 1
+                            ReDim Preserve arPath(1 To iPathCount)
+                            
+                            iRowNow = iRowNext
+                            iColNow = iColNext
+                            
+                            Cells(iRowNow, iColNow).Interior.Color = RGB(255, 160, 122)
+                            
+                            'Call Delay(0.6)
+                            
+                            arPath(iPathCount) = sTemp
+                            Exit For
+                        End If
+                    End If
+                End If
+            'End If
+        Next i
+        
+        If i = 5 Then
+            Cells(CInt(Split(arPath(iPathCount), "*")(0)), CInt(Split(arPath(iPathCount), "*")(1))).Interior.Color = xlNone
+            
+            'Call Delay(0.6)
+            
+            Call CopyPath
+            
+            Call retreatPath
+            Exit Do
+        End If
+    Loop
+End Sub
+
+Sub path()
+    Rows.Interior.Color = xlNone
+    
+    iPathCount = 1
+    ReDim Preserve arPath(1 To iPathCount)
+    arPath(iPathCount) = CStr(ROWSTART) & "*" & CStr(COLSTART)
+    
+    Call core(ROWSTART, COLSTART)
+    
+    If iPathCount = 0 Then Exit Sub
+    
+    Call CopyPath
+End Sub
+
+Function nextStepExistsInPath(ByVal sTemp As String) As Boolean
+    
+    Dim i As Integer
+    
+    Dim iLBndAr As Integer, iUBndAr As Integer
+    iLBndAr = LBound(arPath)
+    iUBndAr = UBound(arPath)
+    
+    For i = iLBndAr To iUBndAr
+        If arPath(i) = sTemp Then
+            nextStepExistsInPath = True
+            Exit Function
+        End If
+    Next i
+End Function
+
+Function stepNext(ByVal iRow As Integer, ByVal iCol As Integer, iArrow As Integer) As String
+    Select Case iArrow
+        Case 1
+            iCol = iCol + 1
+        Case 2
+            iRow = iRow + 1
+        Case 3
+            iCol = iCol - 1
+        Case 4
+            iRow = iRow - 1
+    End Select
+    
+    stepNext = iRow & "*" & iCol
+End Function
